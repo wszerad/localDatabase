@@ -1,3 +1,5 @@
+//TODO turn loop sequences to reduce logical test (data loop>realtion loop to relation loop>data loop) (to speedup)
+
 var Store = function(scheme, indexes){
 	this.db = window.localStorage;
 
@@ -35,6 +37,9 @@ Store.prototype.register = function(scheme, indexes){
 	indexes.forEach(function(index){
 		content = self.getItem(self.prefix.index + index);
 
+		if(Array.isArray(index))
+			return;
+
 		if (!content)
 			self.indexCache[index] = {};
 		else
@@ -63,7 +68,12 @@ Store.prototype.put = function(data){
 	}
 
 	ret = data.map(function(data) {
-		var key, index, id, update;
+		var key, index, id, update, j;
+
+		Object.keys(data).forEach(function(key){
+			if(typeof data[key] === 'srting')
+				data[key] = data[key].toLocaleUpperCase();
+		});
 
 		for (var i in self.scheme) {
 			key = self.scheme[i];
@@ -71,12 +81,14 @@ Store.prototype.put = function(data){
 			if (key == 'id') {
 				id = data[i];
 			} else {
-				index = self.cache[i].indexOf(data[i]);
+				j = (typeof key === 'string')? key : i;
+
+				index = self.cache[j].indexOf(data[i]);
 
 				if (index === -1) {
-					index = self.cache[i].length;
-					self.cache[i].push(data[i]);
-					changed[i] = true;
+					index = self.cache[j].length;
+					self.cache[j].push(data[i]);
+					changed[j] = true;
 				}
 
 				data[i] = index;
@@ -90,7 +102,14 @@ Store.prototype.put = function(data){
 		self.setItem(self.prefix.data + id, data);
 
 		self.indexes.forEach(function (index) {
-			var indexCache = self.indexCache[index],
+			var key = index;
+
+			if(typeof index !== 'string'){
+				key = index[1];
+				index = index[0];
+			}
+
+			var indexCache = self.indexCache[key],
 				newValue = data[index],
 				upValue;
 
@@ -117,7 +136,8 @@ Store.prototype.put = function(data){
 		self.db.setItem(self.prefix.records, self.records);
 
 	self.indexes.forEach(function (index) {
-		self.setItem(self.prefix.index + index, self.indexCache[index]);
+		if(!Array.isArray(index))
+			self.setItem(self.prefix.index + index, self.indexCache[index]);
 	});
 
 	Object.keys(changed).forEach(function (name) {
@@ -161,11 +181,19 @@ Store.prototype.get = function(id, index, limit){
 		ret = [ret];
 
 	ret = ret.map(function(data){
+		if(data===null)
+			console.log(arguments);
+
 		for(var i in self.scheme){
+			var key = self.scheme[i],
+				j;
+
 			if(self.scheme[i]==='id')
 				continue;
 
-			data[i] = self.cache[i][data[i]];
+			j = (typeof key === 'string')? key : i;
+
+			data[i] = self.cache[j][data[i]];
 		}
 
 		return data;
@@ -182,7 +210,7 @@ Store.prototype.list = function(key, reg, limit){
 		index = 0;
 
 	this.cache[key].some(function(str){
-		if(reg.test(str)){
+		if(reg && reg.test(str)){
 			index++;
 			ret.push(str);
 		}
